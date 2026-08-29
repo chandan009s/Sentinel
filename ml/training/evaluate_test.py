@@ -1,4 +1,5 @@
 import pandas as pd
+import json
 
 from sklearn.metrics import (
     precision_score,
@@ -13,7 +14,7 @@ from ml.models.isolation_forest import AnomalyDetector
 
 DATA_PATH = "data/raw/synthetic_transactions.csv"
 
-ANOMALY_THRESHOLD = 0.665000
+MODEL_META_PATH = "ml/models/isolation_forest_v1_meta.json"
 
 FEATURE_COLUMNS = [
     "velocity_ratio",
@@ -23,6 +24,11 @@ FEATURE_COLUMNS = [
 def main():
 
     df = pd.read_csv(DATA_PATH)
+
+    with open(MODEL_META_PATH) as f:
+        metadata = json.load(f)
+
+    anomaly_threshold = metadata["threshold"]
 
     features = create_time_features(df)
 
@@ -65,7 +71,7 @@ def main():
     )
 
     test["prediction"] = (
-        test["anomaly_score"] >= ANOMALY_THRESHOLD
+        test["anomaly_score"] >= anomaly_threshold
     ).astype(int)
 
     precision = precision_score(
@@ -97,7 +103,7 @@ def main():
 
     print(
         f"\nLocked threshold: "
-        f"{ANOMALY_THRESHOLD:.6f}"
+        f"{anomaly_threshold:.6f}"
     )
 
     print(
