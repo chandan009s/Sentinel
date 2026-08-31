@@ -5,8 +5,8 @@ from ml.features.feature_engineering import create_time_features
 from ml.models.isolation_forest import AnomalyDetector
 
 DATA_PATH = "data/raw/synthetic_transactions.csv"
+THRESHOLD_PATH = "models/threshold.json"
 MODEL_PATH = "ml/models/isolation_forest.pkl"
-MODEL_META_PATH = "ml/models/isolation_forest_v1_meta.json"
 
 FEATURE_COLUMNS = [
     "velocity_ratio",
@@ -14,13 +14,12 @@ FEATURE_COLUMNS = [
 ]
 
 def main():
+    with open(THRESHOLD_PATH) as f:
+        threshold_config = json.load(f)
+
+    anomaly_threshold = threshold_config["threshold"]
 
     df = pd.read_csv(DATA_PATH)
-
-    with open(MODEL_META_PATH) as f:
-        metadata = json.load(f)
-
-    anomaly_threshold = metadata["threshold"]
 
     features = create_time_features(df)
 

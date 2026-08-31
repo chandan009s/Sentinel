@@ -1,5 +1,6 @@
 import pandas as pd
 import json
+import numpy as np
 
 from sklearn.metrics import (
     precision_score,
@@ -14,7 +15,7 @@ from ml.models.isolation_forest import AnomalyDetector
 
 DATA_PATH = "data/raw/synthetic_transactions.csv"
 
-MODEL_META_PATH = "ml/models/isolation_forest_v1_meta.json"
+THRESHOLD_PATH = "models/threshold.json"
 
 FEATURE_COLUMNS = [
     "velocity_ratio",
@@ -25,10 +26,10 @@ def main():
 
     df = pd.read_csv(DATA_PATH)
 
-    with open(MODEL_META_PATH) as f:
-        metadata = json.load(f)
+    with open(THRESHOLD_PATH) as f:
+        threshold_config = json.load(f)
 
-    anomaly_threshold = metadata["threshold"]
+    anomaly_percentile = threshold_config["percentile"]
 
     features = create_time_features(df)
 
@@ -41,7 +42,6 @@ def main():
         ]
     ).copy()
 
-    # Preserve chronological order
     features = features.sort_values(
         "timestamp"
     ).reset_index(drop=True)
@@ -64,7 +64,18 @@ def main():
 
     detector = AnomalyDetector()
 
+    detector = AnomalyDetector()
+
     detector.fit(X_train)
+
+    train_scores = detector.anomaly_score(
+        X_train
+    )
+
+    anomaly_threshold = np.percentile(
+        train_scores,
+        anomaly_percentile
+    )
 
     test["anomaly_score"] = detector.anomaly_score(
         X_test
@@ -102,7 +113,12 @@ def main():
     print("================================")
 
     print(
-        f"\nLocked threshold: "
+        f"\nLocked percentile: "
+        f"{anomaly_percentile:.1f}"
+    )
+
+    print(
+        f"Calculated threshold: "
         f"{anomaly_threshold:.6f}"
     )
 

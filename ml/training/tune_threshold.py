@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 import pandas as pd
+import numpy as np
 
 from sklearn.metrics import (
     precision_score,
@@ -58,20 +59,26 @@ def main():
     detector = AnomalyDetector()
     detector.fit(X_train)
 
-    # Score validation set
+    train_scores = detector.anomaly_score(
+        X_train
+    )
+
     scores = detector.anomaly_score(
         X_validation
     )
 
     validation["anomaly_score"] = scores
 
-    thresholds = sorted(
-        validation["anomaly_score"].unique()
-    )
+    percentiles = range(80, 100)
 
     results = []
 
-    for threshold in thresholds:
+    for percentile in percentiles:
+
+        threshold = np.percentile(
+            train_scores,
+            percentile
+        )
 
         predictions = (
             scores >= threshold
@@ -110,6 +117,7 @@ def main():
 
         results.append(
             {
+                "percentile": percentile,
                 "threshold": threshold,
                 "precision": precision,
                 "recall": recall,
@@ -131,7 +139,8 @@ def main():
     with open("models/threshold.json", "w") as f:
         json.dump(
             {
-                "threshold": float(best["threshold"])
+                "percentile": float(best["percentile"]),
+                "threshold": float(best["threshold"]),
             },
             f,
             indent=4,
@@ -152,6 +161,10 @@ def main():
     )
 
     print("\nBest validation threshold:")
+
+    print(
+        f"Percentile: {best['percentile']:.1f}"
+    )
 
     print(
         f"Threshold: {best['threshold']:.6f}"
