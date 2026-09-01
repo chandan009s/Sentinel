@@ -1,0 +1,60 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: ai-risk-manager-postgres
+    environment:
+      POSTGRES_DB: risk_manager
+      POSTGRES_USER: risk_user
+      POSTGRES_PASSWORD: risk_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: ai-risk-manager-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: ai-risk-manager-grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    volumes:
+      - grafana_data:/var/lib/grafana
+
+  ml-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ai-risk-manager-ml
+    ports:
+      - "8000:8000"
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ai-risk-manager-backend
+    ports:
+      - "8080:8080"
+    environment:
+      POSTGRES_HOST: ${POSTGRES_HOST}
+      POSTGRES_PORT: ${POSTGRES_PORT}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      ML_SERVICE_URL: ${ML_SERVICE_URL}
+    depends_on:
+      - postgres
+      - ml-service
+
+volumes:
+  postgres_data:
+  grafana_data:
