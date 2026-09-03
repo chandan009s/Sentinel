@@ -73,6 +73,18 @@ type PredictResponse struct {
 	RiskLevel    string  `json:"risk_level"`
 }
 
+func determineRiskLevel(score, threshold float64) string {
+	if score < threshold {
+		return "LOW"
+	}
+
+	if score < threshold+0.05 {
+		return "MEDIUM"
+	}
+
+	return "HIGH"
+}
+
 func predictHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -150,6 +162,11 @@ func predictHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "failed to decode ML response", http.StatusBadGateway)
 		return
 	}
+
+	prediction.RiskLevel = determineRiskLevel(
+		prediction.AnomalyScore,
+		prediction.Threshold,
+	)
 
 	_, err = db.Exec(`
 		INSERT INTO risk_events (
