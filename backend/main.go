@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"io"
 	"log"
+	"math"
 	"net/http"
 	"os"
 
@@ -90,6 +91,16 @@ func predictHandler(w http.ResponseWriter, r *http.Request) {
 
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if math.IsNaN(request.VelocityRatio) ||
+		math.IsInf(request.VelocityRatio, 0) ||
+		math.IsNaN(request.AmountRatio) ||
+		math.IsInf(request.AmountRatio, 0) ||
+		request.VelocityRatio < 0 ||
+		request.AmountRatio < 0 {
+		http.Error(w, "ratios must be non-negative finite numbers", http.StatusBadRequest)
 		return
 	}
 
