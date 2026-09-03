@@ -4,10 +4,10 @@ import (
 	"bytes"
 	"database/sql"
 	"encoding/json"
-	"os"
 	"io"
 	"log"
 	"net/http"
+	"os"
 
 	"ai-risk-manager/backend/database"
 	"github.com/prometheus/client_golang/prometheus"
@@ -99,7 +99,11 @@ func predictHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response, err := http.Post(
+	client := &http.Client{
+		Timeout: 5 * time.Second,
+	}
+
+	response, err := client.Post(
 		mlServiceURL,
 		"application/json",
 		bytes.NewBuffer(requestBody),
