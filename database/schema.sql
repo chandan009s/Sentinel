@@ -10,3 +10,6 @@ CREATE TABLE IF NOT EXISTS risk_events (
     risk_level VARCHAR(20) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE INDEX IF NOT EXISTS idx_risk_events_created_at
+ON risk_events (created_at DESC);
