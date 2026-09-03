@@ -35,6 +35,24 @@ func TestDetermineRiskLevel(t *testing.T) {
 			threshold: threshold,
 			expected:  "LOW",
 		},
+		{
+			name:      "at threshold",
+			score:     threshold,
+			threshold: threshold,
+			expected:  "MEDIUM",
+		},
+		{
+			name:      "just below high risk boundary",
+			score:     threshold + mediumRiskMargin - 0.001,
+			threshold: threshold,
+			expected:  "MEDIUM",
+		},
+		{
+			name:      "at high risk boundary",
+			score:     threshold + mediumRiskMargin,
+			threshold: threshold,
+			expected:  "HIGH",
+		},
 	}
 
 	for _, tt := range tests {
