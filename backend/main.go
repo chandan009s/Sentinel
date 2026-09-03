@@ -73,15 +73,16 @@ type PredictResponse struct {
 	RiskLevel    string  `json:"risk_level"`
 }
 
+const mediumRiskMargin = 0.05
+
 func determineRiskLevel(score, threshold float64) string {
 	if score < threshold {
 		return "LOW"
 	}
 
-	if score < threshold+0.05 {
+	if score < threshold+mediumRiskMargin {
 		return "MEDIUM"
 	}
-
 	return "HIGH"
 }
 
