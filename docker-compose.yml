@@ -3,9 +3,14 @@ services:
     image: postgres:16
     container_name: ai-risk-manager-postgres
     environment:
-      POSTGRES_DB: risk_manager
-      POSTGRES_USER: risk_user
-      POSTGRES_PASSWORD: risk_password
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
     ports:
       - "5432:5432"
     volumes:
@@ -36,6 +41,11 @@ services:
     container_name: ai-risk-manager-ml
     ports:
       - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   backend:
     build:
@@ -52,8 +62,10 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       ML_SERVICE_URL: ${ML_SERVICE_URL}
     depends_on:
-      - postgres
-      - ml-service
+      postgres:
+        condition: service_healthy
+      ml-service:
+        condition: service_healthy
 
 volumes:
   postgres_data:
