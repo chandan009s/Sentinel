@@ -83,20 +83,10 @@ def predict(request: PredictionRequest):
         score >= ANOMALY_THRESHOLD
     )
 
-    if prediction == 0:
-        risk_level = "LOW"
-
-    elif score < ANOMALY_THRESHOLD + 0.05:
-        risk_level = "MEDIUM"
-
-    else:
-        risk_level = "HIGH"
-
     return {
         "merchant_id": request.merchant_id,
         "timestamp": request.timestamp,
         "anomaly_score": score,
         "threshold": ANOMALY_THRESHOLD,
         "prediction": prediction,
-        "risk_level": risk_level,
     }
