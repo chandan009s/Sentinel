@@ -35,6 +35,13 @@ var (
 		},
 	)
 
+	mediumRiskTotal = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: "risk_medium_predictions_total",
+			Help: "Total number of MEDIUM risk predictions.",
+		},
+	)
+
 	lowRiskTotal = prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Name: "risk_low_predictions_total",
@@ -53,6 +60,7 @@ var (
 func init() {
 	prometheus.MustRegister(predictionsTotal)
 	prometheus.MustRegister(highRiskTotal)
+	prometheus.MustRegister(mediumRiskTotal)
 	prometheus.MustRegister(lowRiskTotal)
 	prometheus.MustRegister(predictionLatency)
 }
@@ -207,6 +215,8 @@ func predictHandler(w http.ResponseWriter, r *http.Request) {
 
 	if prediction.RiskLevel == "HIGH" {
 		highRiskTotal.Inc()
+	} else if prediction.RiskLevel == "MEDIUM" {
+		mediumRiskTotal.Inc()
 	} else if prediction.RiskLevel == "LOW" {
 		lowRiskTotal.Inc()
 	}
