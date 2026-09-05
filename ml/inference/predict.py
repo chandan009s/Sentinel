@@ -1,17 +1,16 @@
 import pandas as pd
 import json
 
+from ml.features.feature_contract import (
+    FEATURE_COLUMNS,
+    validate_feature_frame,
+)
 from ml.features.feature_engineering import create_time_features
 from ml.models.isolation_forest import AnomalyDetector
 
-DATA_PATH = "data/raw/synthetic_transactions.csv"
+DATA_PATH = "data/raw/synthetic_transactions_v2.csv"
 THRESHOLD_PATH = "models/threshold.json"
 MODEL_PATH = "ml/models/isolation_forest.pkl"
-
-FEATURE_COLUMNS = [
-    "velocity_ratio",
-    "amount_ratio",
-]
 
 def main():
     with open(THRESHOLD_PATH) as f:
@@ -29,12 +28,16 @@ def main():
             "amount_baseline",
             "velocity_ratio",
             "amount_ratio",
+            "velocity_acceleration_1m",
+            "amount_acceleration_1m",
         ]
     ).copy()
 
     features = features.sort_values(
         "timestamp"
     ).reset_index(drop=True)
+
+    validate_feature_frame(features)
 
     detector = AnomalyDetector()
     detector.load(MODEL_PATH)

@@ -195,6 +195,26 @@ def create_time_features(df: pd.DataFrame) -> pd.DataFrame:
             amount_baseline.to_numpy()
         )
 
+        bucket["velocity_ratio"] = (
+            bucket["transaction_count_1m"]
+            / bucket["transaction_count_baseline"]
+        )
+
+        bucket["amount_ratio"] = (
+            bucket["total_amount_1m"]
+            / bucket["amount_baseline"]
+        )
+
+        # Compute behavioral change at the merchant-minute
+        # level rather than between irregular transaction rows.
+        bucket["velocity_acceleration_1m"] = (
+            bucket["velocity_ratio"].diff()
+        )
+
+        bucket["amount_acceleration_1m"] = (
+            bucket["amount_ratio"].diff()
+        )
+
         group = group.reset_index()
 
         group = group.merge(
@@ -202,6 +222,8 @@ def create_time_features(df: pd.DataFrame) -> pd.DataFrame:
                 [
                     "transaction_count_baseline",
                     "amount_baseline",
+                    "velocity_acceleration_1m",
+                    "amount_acceleration_1m",
                 ]
             ],
             left_on="minute_bucket",

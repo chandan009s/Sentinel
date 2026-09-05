@@ -1,20 +1,20 @@
-import pandas as pd
 import json
-import numpy as np
 
+import numpy as np
+import pandas as pd
 from sklearn.metrics import (
+    classification_report,
+    confusion_matrix,
+    f1_score,
     precision_score,
     recall_score,
-    f1_score,
-    confusion_matrix,
-    classification_report,
 )
 
 from ml.features.feature_engineering import create_time_features
 from ml.models.isolation_forest import AnomalyDetector
 
-DATA_PATH = "data/raw/synthetic_transactions.csv"
 
+DATA_PATH = "data/raw/synthetic_transactions.csv"
 THRESHOLD_PATH = "models/threshold.json"
 
 FEATURE_COLUMNS = [
@@ -22,8 +22,8 @@ FEATURE_COLUMNS = [
     "amount_ratio",
 ]
 
-def main():
 
+def main():
     df = pd.read_csv(DATA_PATH)
 
     with open(THRESHOLD_PATH) as f:
@@ -42,9 +42,12 @@ def main():
         ]
     ).copy()
 
-    features = features.sort_values(
-        "timestamp"
-    ).reset_index(drop=True)
+    features = (
+        features
+        .sort_values("timestamp")
+        .reset_index(drop=True)
+    )
+
     n = len(features)
 
     train_end = int(n * 0.70)
@@ -63,18 +66,13 @@ def main():
     y_test = test["fraud_spike"]
 
     detector = AnomalyDetector()
-
-    detector = AnomalyDetector()
-
     detector.fit(X_train)
 
-    train_scores = detector.anomaly_score(
-        X_train
-    )
+    train_scores = detector.anomaly_score(X_train)
 
     anomaly_threshold = np.percentile(
         train_scores,
-        anomaly_percentile
+        anomaly_percentile,
     )
 
     test["anomaly_score"] = detector.anomaly_score(
@@ -108,6 +106,14 @@ def main():
         test["prediction"],
     )
 
+    tn, fp, fn, tp = matrix.ravel()
+
+    false_positive_rate = (
+        fp / (fp + tn)
+        if (fp + tn) > 0
+        else 0.0
+    )
+
     print("\n================================")
     print("FINAL TEST EVALUATION")
     print("================================")
@@ -136,14 +142,6 @@ def main():
 
     print("\nConfusion Matrix:")
     print(matrix)
-
-    tn, fp, fn, tp = matrix.ravel()
-
-    false_positive_rate = (
-        fp / (fp + tn)
-        if (fp + tn) > 0
-        else 0.0
-    )
 
     print(
         f"False Positive Rate: "
@@ -183,7 +181,80 @@ def main():
             ascending=False,
         )
         .head(20)
+        .to_string(index=False)
     )
+
+    # ---------------------------------------------------------
+    # False-negative analysis
+    # ---------------------------------------------------------
+
+    false_negatives = test[
+        (test["fraud_spike"] == 1)
+        & (test["prediction"] == 0)
+    ].copy()
+
+    false_negatives["distance_below_threshold"] = (
+        anomaly_threshold
+        - false_negatives["anomaly_score"]
+    )
+
+    print("\n================================")
+    print("FALSE NEGATIVE ANALYSIS")
+    print("================================")
+
+    print(
+        f"Missed spikes: {len(false_negatives)}"
+    )
+
+    print(
+        f"Miss rate: "
+        f"{len(false_negatives) / max(tp + fn, 1):.4f}"
+    )
+
+    if false_negatives.empty:
+        print("\nNo false negatives found.")
+        return
+
+    print("\nMissed spikes ordered by closest to threshold:")
+
+    print(
+        false_negatives[
+            [
+                "merchant_id",
+                "timestamp",
+                "velocity_ratio",
+                "amount_ratio",
+                "anomaly_score",
+                "distance_below_threshold",
+            ]
+        ]
+        .sort_values(
+            "distance_below_threshold",
+            ascending=True,
+        )
+        .to_string(index=False)
+    )
+
+    print("\nMissed spikes ordered by lowest anomaly score:")
+
+    print(
+        false_negatives[
+            [
+                "merchant_id",
+                "timestamp",
+                "velocity_ratio",
+                "amount_ratio",
+                "anomaly_score",
+                "distance_below_threshold",
+            ]
+        ]
+        .sort_values(
+            "anomaly_score",
+            ascending=True,
+        )
+        .to_string(index=False)
+    )
+
 
 if __name__ == "__main__":
     main()

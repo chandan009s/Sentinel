@@ -1,87 +1,127 @@
+from __future__ import annotations
+
 import json
 from pathlib import Path
-import pandas as pd
+
 import numpy as np
+import pandas as pd
 
 from sklearn.metrics import (
+    f1_score,
     precision_score,
     recall_score,
-    f1_score,
 )
 
 from ml.features.feature_engineering import create_time_features
 from ml.models.isolation_forest import AnomalyDetector
 
-DATA_PATH = "data/raw/synthetic_transactions.csv"
+
+DATA_PATH = "data/raw/synthetic_transactions_v2.csv"
+MODEL_PATH = "ml/models/isolation_forest.pkl"
+THRESHOLD_PATH = "models/threshold.json"
+
+TRAIN_END = 707.06
+VALIDATION_END = 1210.30
 
 FEATURE_COLUMNS = [
     "velocity_ratio",
     "amount_ratio",
+    "velocity_acceleration_1m",
+    "amount_acceleration_1m",
 ]
 
-def main():
+FN_COST = 20
+FP_COST = 1
 
+
+def main() -> None:
     df = pd.read_csv(DATA_PATH)
 
-    features = create_time_features(df)
-    features = features.dropna(
-        subset=[
-            "transaction_count_baseline",
-            "amount_baseline",
-            "velocity_ratio",
-            "amount_ratio",
-        ]
-    ).copy()
-
-    features = features.sort_values(
-        "timestamp"
+    df = df.sort_values(
+        ["timestamp", "merchant_id"]
     ).reset_index(drop=True)
 
-    n = len(features)
+    # Compute temporal features over the complete timeline
+    # so validation retains the historical context required
+    # by rolling and lagged features.
+    features = create_time_features(df)
 
-    train_end = int(n * 0.70)
-    validation_end = int(n * 0.85)
+    features = features.dropna(
+        subset=FEATURE_COLUMNS
+    ).copy()
 
-    train = features.iloc[:train_end].copy()
-    validation = features.iloc[
-        train_end:validation_end
+    train = features[
+        features["timestamp"] < TRAIN_END
     ].copy()
+
+    validation = features[
+        (features["timestamp"] >= TRAIN_END)
+        & (features["timestamp"] < VALIDATION_END)
+    ].copy()
+
+    if train.empty:
+        raise RuntimeError(
+            "Training set is empty."
+        )
+
+    if validation.empty:
+        raise RuntimeError(
+            "Validation set is empty."
+        )
 
     normal_train = train[
         train["fraud_spike"] == 0
     ].copy()
 
-    X_train = normal_train[FEATURE_COLUMNS]
-    X_validation = validation[FEATURE_COLUMNS]
+    if normal_train.empty:
+        raise RuntimeError(
+            "No normal training samples available."
+        )
 
-    y_validation = validation["fraud_spike"]
+    X_train = normal_train[
+        FEATURE_COLUMNS
+    ]
 
-    detector = AnomalyDetector()
-    detector.fit(X_train)
+    X_validation = validation[
+        FEATURE_COLUMNS
+    ]
+
+    y_validation = (
+        validation["fraud_spike"]
+        .astype(int)
+        .to_numpy()
+    )
+
+    detector = AnomalyDetector(
+        n_estimators=200,
+        contamination="auto",
+        random_state=42,
+    )
+
+    detector.fit(
+        X_train.to_numpy()
+    )
 
     train_scores = detector.anomaly_score(
-        X_train
+        X_train.to_numpy()
     )
 
-    scores = detector.anomaly_score(
-        X_validation
+    validation_scores = detector.anomaly_score(
+        X_validation.to_numpy()
     )
-
-    validation["anomaly_score"] = scores
-
-    percentiles = range(80, 100)
 
     results = []
 
-    for percentile in percentiles:
-
-        threshold = np.percentile(
-            train_scores,
-            percentile
+    for percentile in range(80, 100):
+        threshold = float(
+            np.percentile(
+                train_scores,
+                percentile,
+            )
         )
 
         predictions = (
-            scores >= threshold
+            validation_scores >= threshold
         ).astype(int)
 
         precision = precision_score(
@@ -102,17 +142,23 @@ def main():
             zero_division=0,
         )
 
-        false_negatives = (
-            (y_validation == 1) & (predictions == 0)
-        ).sum()
+        false_negatives = int(
+            (
+                (y_validation == 1)
+                & (predictions == 0)
+            ).sum()
+        )
 
-        false_positives = (
-            (y_validation == 0) & (predictions == 1)
-        ).sum()
+        false_positives = int(
+            (
+                (y_validation == 0)
+                & (predictions == 1)
+            ).sum()
+        )
 
         total_cost = (
-            false_negatives * 20
-            + false_positives * 1
+            FN_COST * false_negatives
+            + FP_COST * false_positives
         )
 
         results.append(
@@ -134,65 +180,138 @@ def main():
         results_df["total_cost"].idxmin()
     ]
 
-    Path("models").mkdir(exist_ok=True)
+    Path("models").mkdir(
+        parents=True,
+        exist_ok=True,
+    )
 
-    with open("models/threshold.json", "w") as f:
+    threshold_payload = {
+        "model": "isolation_forest",
+        "feature_set": "v2",
+        "features": FEATURE_COLUMNS,
+        "train_end": TRAIN_END,
+        "validation_end": VALIDATION_END,
+        "percentile": float(
+            best["percentile"]
+        ),
+        "threshold": float(
+            best["threshold"]
+        ),
+        "false_negative_cost": FN_COST,
+        "false_positive_cost": FP_COST,
+    }
+
+    with open(
+        THRESHOLD_PATH,
+        "w",
+        encoding="utf-8",
+    ) as f:
         json.dump(
-            {
-                "percentile": float(best["percentile"]),
-                "threshold": float(best["threshold"]),
-            },
+            threshold_payload,
             f,
             indent=4,
         )
 
+    print("\n================================")
+    print("V2 THRESHOLD TUNING")
+    print("================================")
+
+    print(
+        f"\nTraining window: "
+        f"< {TRAIN_END:.2f}s"
+    )
+
+    print(
+        f"Validation window: "
+        f"{TRAIN_END:.2f}s–{VALIDATION_END:.2f}s"
+    )
+
+    print(
+        f"\nTraining rows: "
+        f"{len(train):,}"
+    )
+
+    print(
+        f"Normal training samples: "
+        f"{len(normal_train):,}"
+    )
+
+    print(
+        f"Validation rows: "
+        f"{len(validation):,}"
+    )
+
+    print("\nFeatures:")
+
+    for feature in FEATURE_COLUMNS:
+        print(f"  - {feature}")
+
+    print("\nTop threshold candidates:")
+
+    print(
+        results_df.sort_values(
+            [
+                "total_cost",
+                "false_negatives",
+                "false_positives",
+            ],
+            ascending=True,
+        )
+        .head(10)
+        .to_string(index=False)
+    )
+
+    print("\nBest validation threshold")
+
+    print(
+        f"Percentile:       "
+        f"{best['percentile']:.0f}"
+    )
+
+    print(
+        f"Threshold:        "
+        f"{best['threshold']:.6f}"
+    )
+
+    print(
+        f"False positives:  "
+        f"{int(best['false_positives'])}"
+    )
+
+    print(
+        f"False negatives:  "
+        f"{int(best['false_negatives'])}"
+    )
+
+    print(
+        f"Total cost:       "
+        f"{int(best['total_cost'])}"
+    )
+
+    print(
+        f"Precision:        "
+        f"{best['precision']:.4f}"
+    )
+
+    print(
+        f"Recall:           "
+        f"{best['recall']:.4f}"
+    )
+
+    print(
+        f"F1:               "
+        f"{best['f1']:.4f}"
+    )
+
     print(
         f"\nSaved threshold: "
         f"{best['threshold']:.6f}"
-        f" -> models/threshold.json"
-    )
-
-    print("\nThreshold evaluation:")
-    print(
-        results_df.sort_values(
-            "total_cost",
-            ascending=True,
-        ).head(10)
-    )
-
-    print("\nBest validation threshold:")
-
-    print(
-        f"Percentile: {best['percentile']:.1f}"
     )
 
     print(
-        f"Threshold: {best['threshold']:.6f}"
+        f"Saved to: {THRESHOLD_PATH}"
     )
 
-    print(
-        f"False positives:  {int(best['false_positives'])}"
-    )
-
-    print(
-        f"False negatives:  {int(best['false_negatives'])}"
-    )
-
-    print(
-        f"Total cost:       {int(best['total_cost'])}"
-    )
-
-    print(
-        f"Precision: {best['precision']:.4f}"
-    )
-
-    print(
-        f"Recall:    {best['recall']:.4f}"
-    )
-
-    print(
-        f"F1:        {best['f1']:.4f}"
-    )
 
 if __name__ == "__main__":
     main()

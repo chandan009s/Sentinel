@@ -1,4 +1,16 @@
 {
-    "percentile": 95.0,
-    "threshold": 0.6577208933126732
+    "model": "isolation_forest",
+    "feature_set": "v2",
+    "features": [
+        "velocity_ratio",
+        "amount_ratio",
+        "velocity_acceleration_1m",
+        "amount_acceleration_1m"
+    ],
+    "train_end": 707.06,
+    "validation_end": 1210.3,
+    "percentile": 98.0,
+    "threshold": 0.6371286271224166,
+    "false_negative_cost": 20,
+    "false_positive_cost": 1
 }

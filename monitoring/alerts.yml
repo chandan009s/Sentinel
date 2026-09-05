@@ -1,0 +1,138 @@
+groups:
+  - name: ai-risk-manager-recording
+    interval: 15s
+    rules:
+      - record: risk:velocity_ratio_mean_5m
+        expr: |
+          rate(risk_runtime_velocity_ratio_sum_total[5m])
+          /
+          clamp_min(
+            rate(risk_monitoring_samples_total[5m]),
+            0.000001
+          )
+
+      - record: risk:amount_ratio_mean_5m
+        expr: |
+          rate(risk_runtime_amount_ratio_sum_total[5m])
+          /
+          clamp_min(
+            rate(risk_monitoring_samples_total[5m]),
+            0.000001
+          )
+
+      - record: risk:velocity_acceleration_1m_mean_5m
+        expr: |
+          rate(risk_runtime_velocity_acceleration_1m_sum_total[5m])
+          /
+          clamp_min(
+            rate(risk_monitoring_samples_total[5m]),
+            0.000001
+          )
+
+      - record: risk:amount_acceleration_1m_mean_5m
+        expr: |
+          rate(risk_runtime_amount_acceleration_1m_sum_total[5m])
+          /
+          clamp_min(
+            rate(risk_monitoring_samples_total[5m]),
+            0.000001
+          )
+
+      - record: risk:anomaly_score_mean_5m
+        expr: |
+          rate(risk_runtime_anomaly_score_sum_total[5m])
+          /
+          clamp_min(
+            rate(risk_monitoring_samples_total[5m]),
+            0.000001
+          )
+
+  - name: ai-risk-manager
+    rules:
+      - alert: RiskPredictionRateHigh
+        expr: risk_prediction_rate > 0.25
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Risk prediction rate is high"
+          description: "More than 25% of runtime predictions are anomalous."
+
+      - alert: RecentVelocityRatioDrift
+        expr: |
+          abs(
+            risk:velocity_ratio_mean_5m
+            -
+            risk_reference_feature_mean{feature="velocity_ratio"}
+          )
+          /
+          clamp_min(
+            abs(risk_reference_feature_mean{feature="velocity_ratio"}),
+            0.000001
+          ) > 0.25
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Recent velocity ratio drift detected"
+          description: "The recent runtime velocity ratio mean differs materially from the training baseline."
+
+      - alert: RecentAmountRatioDrift
+        expr: |
+          abs(
+            risk:amount_ratio_mean_5m
+            -
+            risk_reference_feature_mean{feature="amount_ratio"}
+          )
+          /
+          clamp_min(
+            abs(risk_reference_feature_mean{feature="amount_ratio"}),
+            0.000001
+          ) > 0.25
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Recent amount ratio drift detected"
+          description: "The recent runtime amount ratio mean differs materially from the training baseline."
+
+      - alert: RecentVelocityAccelerationDrift
+        expr: |
+          abs(
+            risk:velocity_acceleration_1m_mean_5m
+            -
+            risk_reference_feature_mean{feature="velocity_acceleration_1m"}
+          ) > 0.25
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Recent velocity acceleration drift detected"
+          description: "The recent runtime velocity acceleration mean differs materially from the training baseline."
+
+      - alert: RecentAmountAccelerationDrift
+        expr: |
+          abs(
+            risk:amount_acceleration_1m_mean_5m
+            -
+            risk_reference_feature_mean{feature="amount_acceleration_1m"}
+          ) > 0.25
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Recent amount acceleration drift detected"
+          description: "The recent runtime amount acceleration mean differs materially from the training baseline."
+
+      - alert: RiskPredictionLatencyHigh
+        expr: |
+          histogram_quantile(
+            0.95,
+            rate(risk_prediction_latency_seconds_bucket[5m])
+          ) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Risk prediction latency is high"
+          description: "P95 prediction latency exceeded one second."
