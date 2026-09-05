@@ -1,15 +1,19 @@
 import pandas as pd
 
-from feature_engineering import create_time_features
+from ml.features.feature_engineering import create_time_features
 
-df = pd.read_csv("data/raw/creditcard.csv")
 
-features = create_time_features(df)
+def test_create_time_features_produces_expected_columns():
+    df = pd.DataFrame(
+        {
+            "Time": [0.0, 10.0, 20.0, 30.0],
+            "Amount": [10.0, 20.0, 30.0, 40.0],
+        }
+    )
 
-print(features[
-    [
-        "Time",
-        "Amount",
+    features = create_time_features(df)
+
+    expected_columns = [
         "transaction_count_1m",
         "total_amount_1m",
         "average_amount_1m",
@@ -18,17 +22,20 @@ print(features[
         "velocity_ratio",
         "amount_ratio",
     ]
-].iloc[1000:1030])
 
-print("\nFeature Summary:")
-print(
-    features[
-        [
-            "transaction_count_1m",
-            "total_amount_1m",
-            "average_amount_1m",
-            "velocity_ratio",
-            "amount_ratio",
-        ]
-    ].describe()
-)
+    for column in expected_columns:
+        assert column in features.columns
+
+
+def test_create_time_features_preserves_source_columns():
+    df = pd.DataFrame(
+        {
+            "Time": [0.0, 10.0, 20.0],
+            "Amount": [10.0, 20.0, 30.0],
+        }
+    )
+
+    features = create_time_features(df)
+
+    assert list(features["Time"]) == [0.0, 10.0, 20.0]
+    assert list(features["Amount"]) == [10.0, 20.0, 30.0]

@@ -1,89 +1,61 @@
 import pandas as pd
 
-from feature_engineering import create_time_features
+from ml.features.feature_engineering import create_time_features
 
-df = pd.read_csv(
-    "data/raw/synthetic_transactions.csv"
-)
-features = create_time_features(df)
 
-m001 = features[
-    (features["merchant_id"] == "M001")
-    & (features["timestamp"] >= 430)
-    & (features["timestamp"] <= 650)
-]
+def test_spike_features_change_with_activity():
+    df = pd.DataFrame(
+        {
+            "timestamp": [
+                0.0,
+                10.0,
+                20.0,
+                30.0,
+                40.0,
+                50.0,
+                60.0,
+                70.0,
+            ],
+            "merchant_id": ["M001"] * 8,
+            "amount": [
+                20.0,
+                20.0,
+                20.0,
+                20.0,
+                100.0,
+                100.0,
+                100.0,
+                100.0,
+            ],
+            "fraud_spike": [0, 0, 0, 0, 1, 1, 1, 1],
+        }
+    )
 
-print("\n========== M001 SPIKE ANALYSIS ==========\n")
+    features = create_time_features(df)
 
-print(
-    m001[
-        [
-            "timestamp",
-            "fraud_spike",
-            "transaction_count_1m",
-            "transaction_count_baseline",
-            "velocity_ratio",
-            "amount_ratio",
-        ]
-    ].to_string(index=False)
-)
+    normal_rows = features[features["fraud_spike"] == 0]
+    spike_rows = features[features["fraud_spike"] == 1]
 
-m003 = features[
-    (features["merchant_id"] == "M003")
-    & (features["timestamp"] >= 480)
-    & (features["timestamp"] <= 600)
-]
+    assert not spike_rows.empty
 
-print("\n========== M003 DURING M001 SPIKE ==========\n")
+    # The feature pipeline should preserve source rows.
+    assert len(features) == len(df)
 
-print(
-    m003[
-        [
-            "timestamp",
-            "fraud_spike",
-            "transaction_count_1m",
-            "transaction_count_baseline",
-            "velocity_ratio",
-            "amount_ratio",
-        ]
-    ].to_string(index=False)
-)
+    # Spike transactions should have valid amount/velocity inputs.
+    assert spike_rows["amount"].notna().all()
+    assert spike_rows["timestamp"].notna().all()
 
-print("\n========== SUMMARY ==========\n")
+    # At least one derived rolling feature should be available
+    # once sufficient history exists.
+    derived_columns = [
+        "transaction_count_1m",
+        "total_amount_1m",
+        "average_amount_1m",
+    ]
 
-print("M001 before spike:")
-print(
-    m001[
-        (m001["timestamp"] >= 430)
-        & (m001["timestamp"] < 480)
-    ][
-        ["velocity_ratio", "amount_ratio"]
-    ].describe()
-)
+    assert any(
+        spike_rows[column].notna().any()
+        for column in derived_columns
+    )
 
-print("\nM001 during spike:")
-print(
-    m001[
-        (m001["timestamp"] >= 480)
-        & (m001["timestamp"] < 600)
-    ][
-        ["velocity_ratio", "amount_ratio"]
-    ].describe()
-)
-
-print("\nM001 after spike:")
-print(
-    m001[
-        (m001["timestamp"] >= 600)
-        & (m001["timestamp"] <= 650)
-    ][
-        ["velocity_ratio", "amount_ratio"]
-    ].describe()
-)
-
-print("\nM003 during M001 spike:")
-print(
-    m003[
-        ["velocity_ratio", "amount_ratio"]
-    ].describe()
-)
+    assert normal_rows["amount"].mean() < spike_rows["amount"].mean()

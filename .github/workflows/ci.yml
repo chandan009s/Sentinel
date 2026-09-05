@@ -37,6 +37,12 @@ jobs:
       - name: Generate V2 transaction dataset
         run: PYTHONPATH=. python3 ml/features/generate_transactions_v2.py
 
+      - name: Train V2 model
+        run: PYTHONPATH=. python3 ml/training/train_model.py
+
+      - name: Generate prediction stream
+        run: PYTHONPATH=. python3 ml/training/generate_prediction_stream.py
+
       - name: Generate prediction stream
         run: PYTHONPATH=. python3 ml/training/generate_prediction_stream.py
 
@@ -91,15 +97,17 @@ jobs:
         run: |
           docker run --rm \
             -v "$PWD/monitoring:/etc/prometheus" \
+            --entrypoint promtool \
             prom/prometheus:latest \
-            promtool check rules /etc/prometheus/alerts.yml
+            check rules /etc/prometheus/alerts.yml
 
       - name: Validate Prometheus config
         run: |
           docker run --rm \
             -v "$PWD/monitoring:/etc/prometheus" \
+            --entrypoint promtool \
             prom/prometheus:latest \
-            promtool check config /etc/prometheus/prometheus.yml
+            check config /etc/prometheus/prometheus.yml
 
   docker-build:
     name: Docker Build
