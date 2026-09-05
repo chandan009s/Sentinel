@@ -5,3 +5,5 @@ ml/models/*.pkl
 __pycache__
 *.py[cod]
 backend/backend
+data/raw/
+data/reports/
